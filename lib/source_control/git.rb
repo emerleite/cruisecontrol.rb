@@ -24,8 +24,8 @@ module SourceControl
       # need to read from command output, because otherwise tests break
       git('clone', [@repository, path], :execute_in_project_directory => false)
 
-      if @branch
-        git('branch', ['--track', @branch, "origin/#@branch"])
+      if @branch and @branch != 'master'
+        git('branch', ['--track', @branch, "origin/#{@branch}"])
         git('checkout', ['-q', @branch]) # git prints 'Switched to branch "branch"' to stderr unless you pass -q 
       end
       git("reset", ['--hard', revision.number]) if revision
@@ -94,7 +94,9 @@ module SourceControl
     end
 
     def load_new_changesets_from_origin
-      Timeout.timeout(Configuration.git_load_new_changesets_timeout, Timeout::Error) do
+      # NOTE: Git network problems may cause CruiseControl.rb to hang unless you install the system_timer gem.
+      # See: https://cruisecontrolrb.lighthouseapp.com/projects/9150-cruise-control-rb/tickets/229-sometimes-git-hangs
+      MyTimer.timeout(Configuration.git_load_new_changesets_timeout) do
         git("fetch", ["origin"])
       end
     rescue Timeout::Error => e

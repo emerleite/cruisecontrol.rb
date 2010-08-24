@@ -23,8 +23,7 @@
 # Usually, you will want the latter. Set the dashboard URL in the <em>[cruise&nbsp;data]</em>/config/site_config.rb as follows:
 #
 # <pre><code>Configuration.dashboard_url = 'http://your.host.name.com:3333'</pre></code>
-
-class EmailNotifier
+class EmailNotifier < BuilderPlugin
   attr_accessor :emails
   attr_writer :from
   
@@ -38,12 +37,14 @@ class EmailNotifier
 
   def build_finished(build)
     return if @emails.empty? or not build.failed?
-    email :deliver_build_report, build, "#{build.project.name} build #{build.label} failed", "The build failed."
+    email :deliver_build_report, build, "#{build.project.name} build #{build.abbreviated_label} failed",
+          "The build failed."
   end
 
   def build_fixed(build, previous_build)
     return if @emails.empty?
-    email :deliver_build_report, build, "#{build.project.name} build #{build.label} fixed", "The build has been fixed."
+    email :deliver_build_report, build, "#{build.project.name} build #{build.abbreviated_label} fixed",
+          "The build has been fixed."
   end
   
   private
@@ -51,7 +52,7 @@ class EmailNotifier
   def email(template, build, *args)
     BuildMailer.send(template, build, @emails, from, *args)
     CruiseControl::Log.event("Sent e-mail to #{@emails.size == 1 ? "1 person" : "#{@emails.size} people"}", :debug)
-  rescue => e
+  rescue
     settings = ActionMailer::Base.smtp_settings.map { |k,v| "  #{k.inspect} = #{v.inspect}" }.join("\n")
     CruiseControl::Log.event("Error sending e-mail - current server settings are :\n#{settings}", :error)
     raise

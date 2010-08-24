@@ -1,6 +1,6 @@
 require File.dirname(__FILE__) + '/../test_helper'
 
-class BuilderIntegrationTest < Test::Unit::TestCase
+class BuilderIntegrationTest < ActiveSupport::TestCase
   include FileSandbox
   
   def test_checkout
@@ -43,7 +43,6 @@ class BuilderIntegrationTest < Test::Unit::TestCase
   def test_build_if_necessary_should_abort_build_when_central_config_modified
     with_project('project_with_central_config', :revision => 16) do |project, sandbox|
       assert_throws(:reload_project) { project.build_if_necessary }
-      assert Dir["#{sandbox.root}/project_with_central_config/build*"].empty?
       assert_equal "$config_loaded = true\n\n",
                    File.read("#{sandbox.root}/project_with_central_config/work/cruise_config.rb")
     end
@@ -111,8 +110,11 @@ class BuilderIntegrationTest < Test::Unit::TestCase
       build = project.build
       build_log = File.read("#{build.artifacts_directory}/build.log")
 
-      expected_output = "[CruiseControl] Invoking Rake task \"db:migrate\"\nRAILS_ENV=test\n[CruiseControl] Invoking Rake task \"default\"\n"
-      assert build_log.include?(expected_output), "#{expected_output.inspect} not found in build log:\n#{build_log}"
+      expected_output1 = '[CruiseControl] Invoking Rake task "db:migrate"'
+      expected_output2 = 'RAILS_ENV=test'
+      expected_output3 = '[CruiseControl] Invoking Rake task "default"'
+      expected_output = /#{Regexp.escape(expected_output1)}.*#{Regexp.escape(expected_output2)}.*#{Regexp.escape(expected_output3)}/m
+      assert_match expected_output, build_log
     end
 
   end
@@ -138,7 +140,6 @@ class BuilderIntegrationTest < Test::Unit::TestCase
       expected_output = "Vasya_was_here"
       assert build_log.include?(expected_output), "#{expected_output.inspect} not found in build log:\n#{build_log}"
     end
-
   end
 
   def test_custom_rake_task
@@ -161,20 +162,38 @@ class BuilderIntegrationTest < Test::Unit::TestCase
       build = project.build
       build_log = File.read("#{build.artifacts_directory}/build.log")
 
-      expected_output = "my_build invoked\n[CruiseControl] Invoking Rake task \"my_deploy\"\nmy_deploy invoked\n"
-      assert build_log.include?(expected_output), "#{expected_output.inspect} not found in build log:\n#{build_log}"
+      expected_output1 = '[CruiseControl] Invoking Rake task "my_build"'
+      expected_output2 = 'my_build invoked'
+      expected_output3 = '[CruiseControl] Invoking Rake task "my_deploy"'
+      expected_output4 = 'my_deploy invoked'
+      expected_output = /#{Regexp.escape(expected_output1)}.*#{Regexp.escape(expected_output2)}.*#{Regexp.escape(expected_output3)}.*#{Regexp.escape(expected_output4)}/m
+      assert_match expected_output, build_log
     end
-
   end
 
   def test_should_reconnect_to_database_after_db_test_purge_in_cc_build
     with_project 'project_with_db_test_purge_and_migrate' do |project, sandbox|
       build = project.build
       build_log = File.read("#{build.artifacts_directory}/build.log")
-      expected_output = "db-test-purge\nESTABLISH_CONNECTION\n[CruiseControl] Invoking Rake task \"db:migrate\"\ndb-migrate\n"
-      assert build_log.include?(expected_output), "#{expected_output.inspect} not found in build log:\n#{build_log}"
+      # "db-test-purge\nESTABLISH_CONNECTION\n[CruiseControl] Invoking Rake task \"db:migrate\"\ndb-migrate\n"
+      expected_output = <<-OUTPUT
+db-test-purge
+ESTABLISH_CONNECTION
+[CruiseControl] Invoking Rake task "db:migrate"
+** Invoke db:migrate (first_time)
+** Execute db:migrate
+db-migrate
+[CruiseControl] Invoking Rake task "default"
+** Invoke default (first_time)
+** Execute default
+      OUTPUT
+      expected_output1 = 'db-test-purge'
+      expected_output2 = '[CruiseControl] Invoking Rake task "db:migrate"'
+      expected_output3 = 'db-migrate'
+      expected_output4 = '[CruiseControl] Invoking Rake task "default"'
+      expected_output = /#{Regexp.escape(expected_output1)}.*#{Regexp.escape(expected_output2)}.*#{Regexp.escape(expected_output3)}.*#{Regexp.escape(expected_output4)}/m
+      assert_match expected_output, build_log
     end
-
   end
 
   def test_should_break_build_if_no_migration_scripts_but_database_yml_exists

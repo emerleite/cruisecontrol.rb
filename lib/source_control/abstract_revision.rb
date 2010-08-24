@@ -14,13 +14,17 @@ module SourceControl
     end
 
     def ==(other)
-      raise NotImplementedError, "time() not implemented by #{self.class}"
+      raise NotImplementedError, "==() not implemented by #{self.class}"
     end
 
     alias :eql? :==
 
     def inspect
       "#{self.class}:(#{number})"
+    end
+
+    def label
+      self.number.to_s[0..7]
     end
 
   end
